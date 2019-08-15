@@ -17,8 +17,7 @@ class MysqlPooledDB(object):
                     MysqlPooledDB._instance = super().__new__(cls)
         return MysqlPooledDB._instance
 
-    # TODO 还需要回去考虑怎么优化,不用的用户, 不同的端口, 不同的数据库
-    def __init__(self, db='test'):
+    def __init__(self,host=None, user=None, password=None, port=None, db='test'):
         self.pool = PooledDB(
             creator=pymysql,
             maxconnections=6,
@@ -34,10 +33,10 @@ class MysqlPooledDB(object):
             # 0 = None = never, 1 = default = whenever it is requested, 2 = when a cursor is created, 4 = when a query is executed, 7 = always
             ping=0,
             cursorclass=DictCursor,
-            host=MYSQL_CONFIG['host'],
-            port=MYSQL_CONFIG['port'],
-            user=MYSQL_CONFIG['user'],
-            password=MYSQL_CONFIG['password'],
+            host=MYSQL_CONFIG['host'] if not host else host,
+            port=MYSQL_CONFIG['port'] if not port else port,
+            user=MYSQL_CONFIG['user'] if not user else user,
+            password=MYSQL_CONFIG['password'] if not password else password,
             database=db,
             charset='utf8'
         )
@@ -49,7 +48,7 @@ class MysqlPooledDB(object):
 
 
 class MysqlPersistentDB(object):
-    def __init__(self, db='test'):
+    def __init__(self,host=None, user=None, password=None, port=None, db='test'):
         self.pool = PersistentDB(
             creator=pymysql,
             maxusage=None,  # 一个链接最多被重复使用的次数，None表示无限制
@@ -61,10 +60,10 @@ class MysqlPersistentDB(object):
             closeable=False,
             threadlocal=None,  # 本线程独享值得对象，用于保存链接对象，如果链接对象被重置
             cursorclass=DictCursor,
-            host=MYSQL_CONFIG['host'],
-            port=MYSQL_CONFIG['port'],
-            user=MYSQL_CONFIG['user'],
-            password=MYSQL_CONFIG['password'],
+            host=MYSQL_CONFIG['host'] if not host else host,
+            port=MYSQL_CONFIG['port'] if not port else port,
+            user=MYSQL_CONFIG['user'] if not user else user,
+            password=MYSQL_CONFIG['password'] if not password else password,
             database=db,
             charset='utf8'
         )
