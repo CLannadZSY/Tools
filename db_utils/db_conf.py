@@ -21,3 +21,6 @@ MYSQL_CONFIG = {
     "user": "root",
     "password": "xxx",
 }
+
+
+
