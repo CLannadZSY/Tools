@@ -1,8 +1,9 @@
 
 # [redis] 连接配置
-REDIS_HOST = 'localhost'
+# 推荐使用 127 因为使用localhost 会有2秒的延时
+REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
-REDIS_PASSWORD = 'redis_password'
+REDIS_PASSWORD = ''
 REDIS_MAX_CONN = 100
 # 这样也不失为一种好办法,待定使用
 # REDIS_CONFIG = {

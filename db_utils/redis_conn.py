@@ -1,6 +1,5 @@
 import redis
-from tobacco_project.db_utils import db_conf
-# from tobacco_project.db_utils.db_conf import REDIS_CONFIG
+from .db_conf import REDIS_HOST, REDIS_MAX_CONN, REDIS_PASSWORD, REDIS_PORT
 
 class RedisConnPool(object):
     # 单例模式的应用（会在数据库连接池中用到单例模式）
@@ -23,10 +22,10 @@ class RedisConnPool(object):
         return cls._instance
 
     def __init__(self):
-        self._host = db_conf.REDIS_HOST
-        self._port = db_conf.REDIS_PORT
-        self._password = db_conf.REDIS_PASSWORD
-        self._max_conn = db_conf.REDIS_MAX_CONN
+        self._host = REDIS_HOST
+        self._port = REDIS_PORT
+        self._password = REDIS_PASSWORD
+        self._max_conn = REDIS_MAX_CONN
 
     def _conn_redis(self, db=0, is_decode=True):
         self._pool = redis.ConnectionPool(host=self._host,
