@@ -3,11 +3,13 @@
 """
 import sys
 import logging
-from kafka import KafkaConsumer, KafkaProducer
+
 try:
-    from kafka_config import DEV_CONSUMER_CONFIG, DEV_DEFAULT_TOPIC, DEV_PRODUCER_CONFIG
+    from kafka_config import DEV_CONFLUENT_PRODUCER_CONFIG, DEV_CONFLUENT_CONSUMER_CONFIG
 except:
-    from .kafka_config import DEV_CONSUMER_CONFIG, DEV_DEFAULT_TOPIC, DEV_PRODUCER_CONFIG
+    from .kafka_config import DEV_CONFLUENT_PRODUCER_CONFIG, DEV_CONFLUENT_CONSUMER_CONFIG
+
+from confluent_kafka import Producer, Consumer, KafkaError
 
 log = logging.Logger(__name__)
 log.addHandler(logging.StreamHandler(sys.stdout))
@@ -16,66 +18,49 @@ log.addHandler(logging.StreamHandler(sys.stdout))
 # logger = logging.getLogger('kafka')
 # logger.setLevel(logging.DEBUG)
 
+class ConfluentKafkaProducer(object):
+    _instance = None
 
-class ConsumerTool:
-    """
-    消费者类
-    """
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ConfluentKafkaProducer, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
 
-    def __init__(self, *topics, **configs):
-        # self._consumer = KafkaConsumer(*DEV_DEFAULT_TOPIC or topics, **DEV_CONSUMER_CONFIG or configs)
-        self._consumer = KafkaConsumer(**DEV_CONSUMER_CONFIG or configs)
-        self.connect_status = self._consumer.bootstrap_connected()
-        log.info(f'kafka 消费者连接状态: {self.connect_status}')
+    def __init__(self, config: dict = None):
+        self._producer = Producer(DEV_CONFLUENT_PRODUCER_CONFIG or config)
+        # self._producer.produce('mytopic', b'value', callback=delivery_report)
 
-    def connect(self):
-        """
-        返回连接成功之后的对象
-        :return: object
-        """
-        return self._consumer
+    def __del__(self):
+        # self._producer.flush()
+        log.info(f'退出 ConfluentKafkaProducer')
 
-
-    @staticmethod
-    def _on_send_response(*args, **kwargs):
-        """
-        异步提交偏移量的回调函数
-        args[0]是一个dict，key是TopicPartition，value是OffsetAndMetadata，
-            表示该主题下的partition对应的offset；args[1]在提交成功是True，提交失败时是一个Exception类。
-        :param args: args[0] --> {TopicPartition:OffsetAndMetadata}  args[1] --> Exception
-        :param kwargs:
-        :return: None
-        """
-        # log.info(args)
-        if isinstance(args[1], Exception):
-            log.error(f'偏移量提交异常. {args[1]}')
-        else:
-            log.info('偏移量提交成功')
-
-
-class ProducerTool:
-    """
-    生产者类
-    """
-
-    def __init__(self, **configs):
-        self._producer = KafkaProducer(**DEV_PRODUCER_CONFIG or configs)
-        self.connect_status = self._producer.bootstrap_connected()
-        log.info(f'kafka 生产者连接状态: {self.connect_status}')
-
-    def connect(self):
-        """
-        返回连接成功之后的对象
-        :return: object
-        """
+    def producer(self):
         return self._producer
 
-    # 定义一个发送成功的回调函数
-    @staticmethod
-    def _on_send_success(record_metadata):
-        log.info(f'发送成功: {record_metadata=}')
 
-    # 定义一个发送失败的回调函数
-    @staticmethod
-    def _on_send_error(excp):
-        log.error('发送失败', exc_info=excp)
+def delivery_report(err, msg):
+    """ Called once for each message produced to indicate delivery result.
+        Triggered by poll() or flush(). """
+    if err is not None:
+        print('Message delivery failed: {}'.format(err))
+    else:
+        print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
+
+
+class ConfluentKafkaConsumer(object):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(ConfluentKafkaConsumer, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def __init__(self, config: dict = None):
+        self._consumer = Consumer(DEV_CONFLUENT_CONSUMER_CONFIG or config)
+
+    def __del__(self):
+        self._consumer.close()
+        log.info(f'退出 ConfluentKafkaConsumer')
+
+    def consumer(self):
+        return self._consumer
