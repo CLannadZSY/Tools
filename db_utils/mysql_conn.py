@@ -5,7 +5,6 @@ mysql 连接池
 """
 import pymysql
 import threading
-from db_conf import MYSQL_CONFIG_DEV
 from DBUtils.PooledDB import PooledDB
 from pymysql.cursors import DictCursor
 from DBUtils.PersistentDB import PersistentDB
@@ -59,4 +58,3 @@ class MysqlPersistentDB(object):
         conn = self._pool.connection()
         cursor = conn.cursor()
         return conn, cursor
-
