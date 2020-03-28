@@ -1,22 +1,8 @@
 """
 封装 kafka 工具类
 """
-import sys
-import logging
-
-try:
-    from kafka_config import DEV_CONFLUENT_PRODUCER_CONFIG, DEV_CONFLUENT_CONSUMER_CONFIG
-except:
-    from .kafka_config import DEV_CONFLUENT_PRODUCER_CONFIG, DEV_CONFLUENT_CONSUMER_CONFIG
-
 from confluent_kafka import Producer, Consumer, KafkaError
-
-log = logging.Logger(__name__)
-log.addHandler(logging.StreamHandler(sys.stdout))
-
-
-# logger = logging.getLogger('kafka')
-# logger.setLevel(logging.DEBUG)
+from kafka_conf import DEV_CONFLUENT_PRODUCER_CONFIG, DEV_CONFLUENT_CONSUMER_CONFIG
 
 class ConfluentKafkaProducer(object):
     _instance = None
@@ -31,8 +17,7 @@ class ConfluentKafkaProducer(object):
         # self._producer.produce('mytopic', b'value', callback=delivery_report)
 
     def __del__(self):
-        # self._producer.flush()
-        log.info(f'退出 ConfluentKafkaProducer')
+        self._producer.flush()
 
     def producer(self):
         return self._producer
@@ -60,7 +45,6 @@ class ConfluentKafkaConsumer(object):
 
     def __del__(self):
         self._consumer.close()
-        log.info(f'退出 ConfluentKafkaConsumer')
 
     def consumer(self):
         return self._consumer
