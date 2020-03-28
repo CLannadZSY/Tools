@@ -22,6 +22,7 @@ pip install redis pymysql
 ```
 
 ### Usage example [使用示例](example.py)
+* 使用前, 请修改 ```*.conf.py``` 中的配置, 确保配置正确
 ```python
 # [redis]
 from redis_utils.redis_conn import RedisConnPool
