@@ -21,7 +21,7 @@ Windows:
 pip install redis pymysql
 ```
 
-### Usage example 使用示例
+### Usage example [使用示例](example.py)
 ```python
 # [redis]
 from redis_utils.redis_conn import RedisConnPool
