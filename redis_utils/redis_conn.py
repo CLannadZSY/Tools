@@ -22,6 +22,12 @@ class RedisConnPool(object):
     def connect(self):
         return self._r
 
+    def subscribe(self, chan_sub: str):
+        """订阅模式"""
+        pub = self._r.pubsub()
+        pub.subscribe(chan_sub)
+        return pub
+
     def __del__(self):
         # 超过最大连接数,使用这个关闭,但并不会阻止打开新的连接
         self._pool.disconnect()
