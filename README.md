@@ -73,7 +73,7 @@ consumer = ConfluentKafkaConsumer().consumer()
 
 ## Contributing 贡献指南
 
-有好的建议, 可以在 ```issues```中告诉我
+有什么问题或建议, 可以在 [issues](https://github.com/CLannadZSY/Tools/issues) 中告诉我
 
 ## Release History 版本历史
 
