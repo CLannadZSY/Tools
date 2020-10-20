@@ -5,9 +5,9 @@ mysql 连接池
 """
 import pymysql
 import threading
-from DBUtils.PooledDB import PooledDB
 from pymysql.cursors import DictCursor
-from DBUtils.PersistentDB import PersistentDB
+from dbutils.pooled_db import PooledDB
+from dbutils.persistent_db import PersistentDB
 
 
 class MysqlPooledDB(object):
@@ -43,6 +43,14 @@ class MysqlPersistentDB(object):
     """
     保持常量线程数且频繁使用数据库的应用，使用PersistentDB
     """
+    _instance_lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(MysqlPooledDB, "_instance"):
+            with MysqlPooledDB._instance_lock:
+                if not hasattr(MysqlPooledDB, "_instance"):
+                    MysqlPooledDB._instance = super().__new__(cls)
+        return MysqlPooledDB._instance
 
     def __init__(self, config: dict):
         self._default_conf = {
