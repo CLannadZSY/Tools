@@ -10,7 +10,7 @@
 Linux:
 
 ```sh
-pip install redis pymysql confluent_kafka
+pip install Py-library redis pymysql confluent_kafka
 ```
 
 Windows:
@@ -18,7 +18,7 @@ Windows:
 * windows 下无法安装 ```confluent_kafka``` 模块
 
 ```sh
-pip install redis pymysql
+pip install Py-library redis pymysql
 ```
 
 ### Usage example [使用示例](example.py)
@@ -28,8 +28,8 @@ pip install redis pymysql
 有什么问题或建议, 可以在 [issues](https://github.com/CLannadZSY/Tools/issues) 中告诉我
 
 ## Release History 版本历史
-
-* 2020-03-28: 完成```1.0.0```版本 
+* 2020-10-20: 完成```1.0.4```版本 
+* 2020-03-28: 完成```1.0.0```版本
 
 ## License 授权协议
 
