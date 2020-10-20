@@ -28,6 +28,11 @@ class RedisConnPool(object):
         pub.subscribe(chan_sub)
         return pub
 
+    def pipeline(self, transaction=True, shard_hint=None):
+        """管道"""
+        pipe = self._r.pipeline(transaction=transaction, shard_hint=shard_hint)
+        return pipe
+
     def __del__(self):
         # 超过最大连接数,使用这个关闭,但并不会阻止打开新的连接
         self._pool.disconnect()
