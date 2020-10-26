@@ -5,7 +5,7 @@
 # [mysql]
 from py_library.mysql_conn import MysqlPooledDB
 MYSQL_CONFIG_DEV = {
-    '1bom.1bomSpider': {
+    'db_name': {
         "host": "127.0.0.1",
         "port": 3306,
         "user": "username",

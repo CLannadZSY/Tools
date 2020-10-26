@@ -13,6 +13,20 @@ from dbutils.persistent_db import PersistentDB
 class MysqlPooledDB(object):
     """
     程序频繁的启动和关闭线程, 使用PooledDB
+
+    example:
+        MYSQL_CONFIG_DEV = {
+            'db_name: {
+                "host": "127.0.0.1",
+                "port": 3306,
+                "user": "username",
+                "password": "password",
+                "database": 'dbname'
+            },
+        }
+
+        conn, cursor = MysqlPooledDB(MYSQL_CONFIG_DEV['db_name']).connect()
+
     """
     _instance_lock = threading.Lock()
 

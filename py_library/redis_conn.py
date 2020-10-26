@@ -5,6 +5,19 @@ import redis
 
 
 class RedisConnPool(object):
+    """
+    example:
+        REDIS_CONFIG_DEV = {
+            'redis_name': {
+                'host': "127.0.0.1",
+                'port': 6379,
+                'password': '',
+                'max_connections': 100,
+                'db': 0
+            },
+        }
+        r_0 = RedisConnPool(REDIS_CONFIG_DEV['redis_name']).connect()
+    """
 
     def __new__(cls, *args, **kwargs):
         if not hasattr(RedisConnPool, '_instance'):
