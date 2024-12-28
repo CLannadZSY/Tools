@@ -21,7 +21,45 @@ Windows:
 pip install Py-library redis pymysql
 ```
 
-### Usage example [使用示例](example.py)
+### Usage example [同步连接使用示例](example.py)
+
+### 异步 `mysql`, `redis` 使用示例:
+
+1. Mysql 使用案例
+   ```python
+    from mysql_db import MysqlDB, FetchMode
+    # 配置 MySQL 连接
+    config = {
+        "host": "localhost",
+        "user": "user",
+        "password": "password",
+        "db": "test_db",
+        "echo": True  # 打印SQL查询，便于调试
+    }
+    # data: Dict
+    # datas: List[Dict]
+    # 创建 MysqlDB 实例
+    mysql_db = MysqlDB(config)
+    result = await mysql_db.insert(sql, data)
+    result = await mysql_db.insert_many(sql, datas)
+    result = await mysql_db.insert_smart('table_name', datas)
+    result = await mysql_db.update(sql, data)
+    result = await mysql_db.delete(sql, data)
+    ```
+   
+2. Redis 使用案例
+   ```python
+    # 创建 RedisDBMesh 实例
+    redis_db = RedisDB(redis_conn)
+    client = redis_db.connect()
+
+    # pipeline 使用
+    async with redis_db.get_pipeline() as redis_pipe:
+        for i in range(10000):
+            ok1 = await redis_pipe.set(f"key{i}", f"value{i}")
+        results = await redis_pipe.execute()
+        print(results)
+    await redis_db.close_client()
 
 ## Contributing 贡献指南
 
