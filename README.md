@@ -27,7 +27,7 @@ pip install Py-library redis pymysql
 
 1. Mysql 使用案例
    ```python
-    from mysql_db import MysqlDB, FetchMode
+    from py_library.async_db.mysql_db import MysqlDB, FetchMode
     # 配置 MySQL 连接
     config = {
         "host": "localhost",
@@ -49,6 +49,7 @@ pip install Py-library redis pymysql
    
 2. Redis 使用案例
    ```python
+    from py_library.async_db.redis_db import RedisDB
     # 创建 RedisDB 实例
     redis_db = RedisDB(redis_conn)
     client = redis_db.connect()
@@ -60,6 +61,7 @@ pip install Py-library redis pymysql
         results = await redis_pipe.execute()
         print(results)
     await redis_db.close_client()
+   ```
 
 ## Contributing 贡献指南
 
