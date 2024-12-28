@@ -49,7 +49,7 @@ pip install Py-library redis pymysql
    
 2. Redis 使用案例
    ```python
-    # 创建 RedisDBMesh 实例
+    # 创建 RedisDB 实例
     redis_db = RedisDB(redis_conn)
     client = redis_db.connect()
 
