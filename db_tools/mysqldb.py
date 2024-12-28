@@ -9,11 +9,13 @@ from typing import Optional, Union, Dict, Tuple, List
 logger = logging.getLogger(__name__)
 
 
+# 枚举类：查询结果获取模式（如何获取查询结果）
 class FetchMode(Enum):
-    FETCHONE = "fetchone"
-    FETCHALL = "fetchall"
+    FETCHONE = "fetchone"  # 获取单个结果
+    FETCHALL = "fetchall"  # 获取所有结果
 
 
+# 枚举类：插入SQL模式
 class InsertModeSql(Enum):
     INSERT_DEFAULT = 'INSERT INTO `{table_name}` ({columns_field}) VALUES ({value_field})'
     INSERT_IGNORE = 'INSERT IGNORE INTO `{table_name}` ({columns_field}) VALUES ({value_field})'
@@ -21,18 +23,21 @@ class InsertModeSql(Enum):
     INSERT_UPDATE = 'INSERT INTO `{table_name}` ({columns_field}) VALUES ({value_field}) ON DUPLICATE KEY UPDATE '
 
 
+# 数据类：表示MySQL操作结果
 @dataclass
 class MysqlResult:
-    affect_count: int = 0
-    datas: Optional[Union[List[Dict], Dict, Tuple]] = None
-    error: Optional[str] = None
+    affect_count: int = 0  # 受影响的行数
+    total: int = 0 # 结果条数
+    datas: Optional[Union[List[Dict], Dict, Tuple]] = None  # 查询结果
+    error: Optional[str] = None  # 错误信息
 
 
+# MysqlDB类，用于管理数据库连接和执行SQL操作
 class MysqlDB(MysqlConfig):
-    _instance: Optional['MysqlDB'] = None
+    _instance: Optional['MysqlDB'] = None  # 单例实例
 
     def __new__(cls, *args, **kwargs):
-        # 使用单例模式，确保只创建一个连接池实例
+        # 确保只创建一个MysqlDB实例（单例模式）
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -45,16 +50,18 @@ class MysqlDB(MysqlConfig):
 
     def to_dict(self):
         """
-        返回类的属性字典，包含所有实例属性，包括从父类继承的。
+        将实例属性转换为字典。
+        排除私有属性和可调用的方法。
         """
-        # 获取所有属性（包括父类属性），排除特殊属性（例如 `_instance`）
+        logger.debug("将MysqlDB实例属性转换为字典")
         attr = {key: getattr(self, key) for key in dir(self) if not key.startswith('_') and not callable(getattr(self, key))}
-        attr['cursor_cls'] = self.cursor_cls
+        attr['cursor_cls'] = self.cursor_cls  # 添加cursor类
         return attr
 
     async def _create_pool(self, **kwargs):
-
+        """如果连接池不存在，则创建连接池。"""
         if self._pool is None:
+            logger.info("正在创建MySQL连接池")
             self._pool = await asyncmy.create_pool(
                 **self.to_dict(),
                 **kwargs
@@ -62,6 +69,7 @@ class MysqlDB(MysqlConfig):
 
     @asynccontextmanager
     async def get_connection(self):
+        """从连接池中获取连接。"""
         if self._pool is None:
             await self._create_pool()
         async with self._pool.acquire() as conn:
@@ -70,47 +78,51 @@ class MysqlDB(MysqlConfig):
     async def _execute_sql(
             self,
             sql: str,
-            args: Optional[Union[Tuple, List, Dict]] = None,
+            datas: Optional[Union[Tuple, List, Dict]] = None,
             fetch_mode: FetchMode = None,
             is_many=False
     ) -> MysqlResult:
         """
-        通用的数据库执行方法，用于 execute 和 executemany。
-        :param sql: SQL 查询语句
-        :param args: 查询参数
-        :param fetch_mode: 查询返回的模式 (FetchMode.FETCHONE, FetchMode.FETCHALL)
-        :param is_many: 是否是 executemany 操作
-        :return: 查询结果或执行结果
+        执行通用SQL命令（单个查询或批量操作）。
+        :param sql: SQL查询语句
+        :param datas: 查询参数
+        :param fetch_mode: 查询返回模式(FetchMode.FETCHONE, FetchMode.FETCHALL)
+        :param is_many: 是否为executemany操作
+        :return: 包含查询结果的MysqlResult对象
         """
         result = None
-
         try:
+            logger.debug(f"正在执行SQL: {sql}")
             async with self.get_connection() as conn:
                 async with conn.cursor() as cursor:
                     if is_many:
-                        affect_count = await cursor.executemany(sql, args)
+                        affect_count = await cursor.executemany(sql, datas)
                     else:
-                        affect_count = await cursor.execute(sql, args)
+                        affect_count = await cursor.execute(sql, datas)
 
                     if fetch_mode is not None:
                         result = await getattr(cursor, fetch_mode.value)()
 
                     return MysqlResult(affect_count=affect_count, datas=result, error=None)
         except Exception as e:
+            logger.error(f"执行SQL时出错: {e}")
             return MysqlResult(affect_count=0, datas=None, error=str(e))
 
     async def query(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None, fetch_mode: FetchMode = None) -> MysqlResult:
+        """执行查询操作（SELECT）。"""
         return await self._execute_sql(sql, args, fetch_mode)
 
     async def insert(self, sql: str, args: Optional[Union[Tuple, Dict]] = None) -> MysqlResult:
+        """执行插入操作（INSERT）。"""
         return await self._execute_sql(sql, args)
 
     async def insert_many(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
+        """执行批量插入操作"""
         return await self._execute_sql(sql, args, is_many=True)
 
     async def insert_smart(self, table_name: str, datas: Union[Dict, List[Dict]]) -> MysqlResult:
         """
-        根据数据, 自动生成 sql
+        根据数据自动生成插入SQL语句，支持单条和批量插入。
             sql格式: insert into <table_name> (field, ..., field) values (%s, ..., %s)
             datas: List[Dict] -> new_datas: List[Tuple]
             避免了 RE_INSERT_VALUES.match(query) 卡死, 作者迟迟不修复
@@ -121,24 +133,26 @@ class MysqlDB(MysqlConfig):
                 + r"(\s*(?:ON DUPLICATE.*)?);?\s*\Z",
                 re.IGNORECASE | re.DOTALL,
             )
-
-        :param table_name:
-        :param datas:
-        :return:
+        :param table_name: 表名
+        :param datas: 插入的数据（单条或批量）
+        :return: MysqlResult对象，包含插入操作的结果
         """
+        logger.info(f"为表 {table_name} 生成插入SQL，数据条数: {len(datas)}")
         sql, new_datas = self.make_insert_sql(table_name, datas)
         is_many = False if isinstance(new_datas, Dict) else True
         return await self._execute_sql(sql, new_datas, is_many=is_many)
 
     async def update(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
+        """执行更新操作（UPDATE）。"""
         return await self._execute_sql(sql, args)
 
     async def delete(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
+        """执行删除操作（DELETE）。"""
         return await self._execute_sql(sql, args)
 
     async def close(self):
-        print('close')
-        # 关闭连接池
+        """关闭连接池。"""
+        logger.info("正在关闭MySQL连接池")
         if self._pool:
             self._pool.close()
             await self._pool.wait_closed()
@@ -151,20 +165,25 @@ class MysqlDB(MysqlConfig):
             insert_mode: InsertModeSql = InsertModeSql.INSERT_DEFAULT,
     ) -> tuple[str, List[tuple]]:
         """
-        生成 MySQL 插入或更新 SQL 语句，支持单条插入和批量插入。
+        生成MySQL插入或更新SQL语句，支持单条插入和批量插入。
         :param table_name: 表名
-        :param datas: 数据，单条为字典，批量为字典列表
-        :param update_columns: 需要更新的列（当指定时，auto_update无效）
-        :param insert_mode: 支持：replace into, insert ignore, duplicate key update
-        :return: 生成的 SQL 语句
+        :param datas: 数据（字典或字典列表）
+        :param update_columns: 需要更新的列（仅在指定时有效）
+        :param insert_mode
+            默认: insert into
+                 replace into
+                 insert ignore
+                 insert into ... duplicate key update
+        :return: 生成的SQL查询和插入数据
         """
+        logger.debug(f"正在为表 `{table_name}` 生成插入SQL，插入模式: {insert_mode}")
         insert_sql_mode = insert_mode.name
         insert_sql_template = insert_mode.value
 
         if isinstance(datas, dict):
-            datas = [datas]
+            datas = [datas]  # 确保datas是一个列表
 
-        # 基础SQL模板
+        # 基本SQL模板（列和占位符）
         columns = list(datas[0].keys())
         columns_field = ', '.join(map(lambda x: f"`{x}`", columns))
         value_field = ', '.join(['%s'] * len(columns))
@@ -175,41 +194,13 @@ class MysqlDB(MysqlConfig):
             value_field=value_field
         )
 
-        # 如果没有传入指定的更新列, 则使用传入的数据, 默认更新所有列
+        # 处理“INSERT ... ON DUPLICATE KEY UPDATE”逻辑
         if insert_sql_mode == InsertModeSql.INSERT_UPDATE.name:
             if not update_columns:
-                update_columns = columns
+                update_columns = columns  # 默认使用所有列
             update_columns_field = ", ".join([f"`{key}`=VALUES(`{key}`)" for key in update_columns])
             sql += update_columns_field
 
         new_dats = [tuple(record.values()) for record in datas]
+        logger.debug(f"生成的SQL: {sql} 数据: {new_dats}")
         return sql, new_dats
-
-    # # 同步执行 SQL 操作
-    # def _run_sync(self, coroutine):
-    #     loop = asyncio.get_event_loop()
-    #     return loop.run_until_complete(coroutine)
-    #
-    # # 同步查询操作
-    # def query_sync(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None, fetch_mode: FetchMode = FetchMode.FETCHALL) -> MysqlResult:
-    #     return self._run_sync(self.query(sql, args, fetch_mode))
-    #
-    # # 同步插入操作
-    # def insert_sync(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
-    #     return self._run_sync(self.insert(sql, args))
-    #
-    # # 同步批量插入操作
-    # def insert_many_sync(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
-    #     return self._run_sync(self.insert_many(sql, args))
-    #
-    # # 同步更新操作
-    # def update_sync(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
-    #     return self._run_sync(self.update(sql, args))
-    #
-    # # 同步删除操作
-    # def delete_sync(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> MysqlResult:
-    #     return self._run_sync(self.delete(sql, args))
-    #
-    # # 同步关闭连接池
-    # def close_sync(self):
-    #     self._run_sync(self.close())
