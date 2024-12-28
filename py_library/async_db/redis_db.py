@@ -61,7 +61,7 @@ class RedisDB(RedisConfig):
                 'db': 0
             }
             redis_db = RedisDB(redis_conn)
-            async with redis_db.get_pipeline() as redis_pipe:
+            async_db with redis_db.get_pipeline() as redis_pipe:
                 for i in range(10000):
                     ok1 = await redis_pipe.set(f"key{i}", f"value{i}")
                 results = await redis_pipe.execute()
