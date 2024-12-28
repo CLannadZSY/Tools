@@ -27,7 +27,6 @@ class InsertModeSql(Enum):
 @dataclass
 class MysqlResult:
     affect_count: int = 0  # 受影响的行数
-    total: int = 0 # 结果条数
     datas: Optional[Union[List[Dict], Dict, Tuple]] = None  # 查询结果
     error: Optional[str] = None  # 错误信息
 
