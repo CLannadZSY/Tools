@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from env import RedisConfig
+from .env import RedisConfig
 import redis.asyncio as redis
 from contextlib import asynccontextmanager
 
