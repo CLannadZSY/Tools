@@ -1,7 +1,7 @@
 import logging
 import asyncmy
 from enum import Enum
-from env import MysqlConfig
+from .env import MysqlConfig
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from typing import Optional, Union, Dict, Tuple, List
