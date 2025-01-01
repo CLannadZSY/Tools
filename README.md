@@ -6,6 +6,11 @@
 pip install Py-library
 ```
 
+### 使用前, 生成 `models.py`
+```shell
+sqlacodegen mysql+pymysql://user:password@localhost/dbname
+```
+
 ### Usage example
 
 ### 异步 `mysql`, `redis` [使用示例](example.py):
