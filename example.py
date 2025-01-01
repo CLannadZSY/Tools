@@ -1,64 +1,72 @@
-"""
-使用案例
-"""
+import asyncio
+from models import Test1
+from py_library.async_db.mysql_db import MysqlDB, FetchMode, InsertModeSql
 
-# [mysql]
-from py_library.mysql_conn import MysqlPooledDB
-MYSQL_CONFIG_DEV = {
-    'db_name': {
+
+async def query_tools():
+    config = {
         "host": "127.0.0.1",
-        "port": 3306,
-        "user": "username",
-        "password": "password",
-        "database": 'dbname'
-    },
-}
-conn, cursor = MysqlPooledDB(MYSQL_CONFIG_DEV['db_name']).connect()
+        "user": "",
+        "password": "",
+        "db": "",
+        "autocommit": False
+    }
 
-# [redis]
-from py_library.redis_conn import RedisConnPool
-REDIS_CONFIG_DEV = {
-    'redis_name': {
-        'host': "127.0.0.1",
-        'port': 6379,
-        'password': '',
-        'max_connections': 100,
-        'db': 0
-    },
-}
-r_0 = RedisConnPool(REDIS_CONFIG_DEV['redis_name']).connect()
+    mysql_db = MysqlDB(config)
+    sql = f"SELECT id, a, b, c, d FROM {Test1.__tablename__} limit 100"
 
-# [redis]发布
-r_0 = RedisConnPool(REDIS_CONFIG_DEV['redis_name']).connect()
-chan_sub = 'channel_name'
-message_content = 'Hello World'
-r_0.publish(chan_sub, message_content)
+    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHONE)
+    print(result)
+    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHMANY, fetch_size=2)
+    print(result)
+    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHALL)
+    print(result)
 
-# [redis]订阅
-channel_sub = 'channel_name'
-redis_conn = RedisConnPool(REDIS_CONFIG_DEV['redis_name'])
-redis_sub = redis_conn.subscribe(channel_sub)
-r_0 = redis_conn.connect()
-while True:
-    msg = redis_sub.listen()
-    for i in msg:
-        if i["type"] == "message" and i['channel'] == channel_sub:
-            print(f'接收到消息: {i["data"]=}')
+    # insert
+    sql = "insert into test.test_1 (a, b, c, d) values (%s, %s, %s, %s)"
+    data = (11, 22, 33, 44,)
+    conn, cursor, err = await mysql_db.insert(sql, data, session_auto_commit=False)
+    print(id(conn), id(cursor), err)
+    await conn.commit()
+    # 默认配置 autocommit=True, 这个sql自动提交, 修改为False, 则需要手动 commit 和处理错误err
+    conn, cursor, err = await mysql_db.insert(sql, data)
+    print(id(conn), id(cursor), err)
+
+    sql = "insert into test.test_1 (a, b, c, d) values (%(a)s, %(b)s, %(c)s, %(d)s)"
+    data = {'a': 111, 'b': 222, 'c': 333, 'd': 444}
+    conn, cursor, err = await mysql_db.insert(sql, data, session_auto_commit=False)
+    print(id(conn), id(cursor), err)
+    await conn.commit()
+    conn, cursor, _ = await mysql_db.insert(sql, data)
+    print(id(conn), id(cursor), err)
+
+    # insert smart
+    data = {'a': 1, 'b': 22, 'c': 33, 'd': 44}
+    data = {'id': 1, 'a': 1, 'b': 2, 'c': 3, 'd': 4}
+    data = {'id': 1, 'a': 1, 'd': 4}
+    data = {'id': 1, 'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 'e not exist col'}
+    datas = [data]
+    await mysql_db.insert_smart(Test1, datas)
+    await mysql_db.insert_smart(Test1, datas, insert_mode=InsertModeSql.INSERT_IGNORE)
+    await mysql_db.insert_smart(Test1, datas, insert_mode=InsertModeSql.INSERT_REPLACE)
+    await mysql_db.insert_smart(Test1, datas, insert_mode=InsertModeSql.INSERT_UPDATE)  # 更新datas中的所有列
+    await mysql_db.insert_smart(Test1, datas, insert_mode=InsertModeSql.INSERT_UPDATE, update_columns=['b'])  # 更新指定的列: b
+
+    # update
+    sql = "UPDATE test_1 SET b = %(b)s, c = %(c)s where id = %(id)s"
+    data = {'b': 123, 'c': 456, 'id': 6}
+    sql = "UPDATE test_1 SET b = %s, c = %s where id = %s"
+    data = (123, 456, 6,)
+    conn, cursor, err = await mysql_db.update(sql, data)
+
+    # delete
+    sql = "DELETE FROM test_1 where id = %(id)s"
+    data = {'id': 6}
+    conn, cursor, err = await mysql_db.update(sql, data)
+    sql = "DELETE FROM test_1 where id = %s"
+    data = (4,)
+    conn, cursor, err = await mysql_db.update(sql, data)
 
 
-# [kafka]
-# 详细参考: https://github.com/confluentinc/confluent-kafka-python
-from py_library.kafka_conn import ConfluentKafkaProducer, ConfluentKafkaConsumer
-
-DEV_CONFLUENT_PRODUCER_CONFIG = {
-    'bootstrap.servers': 'server_addr',
-}
-
-DEV_CONFLUENT_CONSUMER_CONFIG = {
-    'bootstrap.servers': 'server_addr',
-    'group.id': 'group_name',
-    'auto.offset.reset': 'earliest',
-    'enable.auto.commit': True
-}
-producer = ConfluentKafkaProducer(DEV_CONFLUENT_PRODUCER_CONFIG).producer()
-consumer = ConfluentKafkaConsumer(DEV_CONFLUENT_CONSUMER_CONFIG).consumer()
+if __name__ == '__main__':
+    asyncio.run(query_tools())
