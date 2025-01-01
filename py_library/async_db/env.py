@@ -13,7 +13,7 @@ class MysqlConfig:
     maxsize: int = 100
     pool_recycle: int = 3600
     max_allowed_packet = 16 * 1024 * 1024  # 客户端能够处理的最大数据包大小 16M
-    autocommit: bool = True
+    autocommit: bool = False
     cursor_cls = DictCursor
 
     def __init__(self, config: dict = None):
