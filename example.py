@@ -15,11 +15,11 @@ async def query_tools():
     mysql_db = MysqlDB(config)
     sql = f"SELECT id, a, b, c, d FROM {Test1.__tablename__} limit 100"
 
-    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHONE)
+    result = await mysql_db.query(sql, table_model=Test1, fetch_mode=FetchMode.FETCHONE)
     print(result)
-    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHMANY, fetch_size=2)
+    result = await mysql_db.query(sql, table_model=Test1, fetch_mode=FetchMode.FETCHMANY, fetch_size=2)
     print(result)
-    result = await mysql_db.query(Test1, sql, fetch_mode=FetchMode.FETCHALL)
+    result = await mysql_db.query(sql, table_model=Test1, fetch_mode=FetchMode.FETCHALL)
     print(result)
 
     # insert

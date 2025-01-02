@@ -126,7 +126,7 @@ class MysqlDB(MysqlConfig):
         logger.debug(f"生成的SQL: {sql} 数据: {new_datas}")
         return sql, new_datas
 
-    async def query(self, table_model: Union[T, Any], sql: str, args=None, fetch_mode: FetchMode = FetchMode.FETCHALL, fetch_size: int = 100) -> Optional[Union[T, List[T]]]:
+    async def query(self, sql: str, args=None, table_model: Optional[Union[T, Any]] = None, fetch_mode: FetchMode = FetchMode.FETCHALL, fetch_size: int = 100) -> Optional[Union[T, List[T], List[Dict], Dict]]:
         """执行查询操作（SELECT），返回 MysqlQueryResult to enable chaining."""
         conn, cursor, _ = await self._execute_sql(sql, args)
 
@@ -146,7 +146,7 @@ class MysqlDB(MysqlConfig):
 
         await self.auto_commit(conn, cursor, True)
 
-        if result:
+        if result and table_model is not None:
             if isinstance(result, List):
                 result = [table_model(**x) for x in result]
             elif isinstance(result, Dict):
