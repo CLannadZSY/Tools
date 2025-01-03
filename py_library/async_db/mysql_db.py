@@ -223,8 +223,9 @@ class MysqlDB(MysqlConfig):
                 logger.error(f"auto_commit error: {e}")
             finally:
                 await cursor.close()
-            #     if conn:
-            #         self._pool.release(conn) # 一直报错
+                if conn:
+                    await conn.ensure_closed()
+                    self._pool.release(conn)
 
     async def _execute_sql(
             self,
