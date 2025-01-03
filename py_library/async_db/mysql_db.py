@@ -222,10 +222,7 @@ class MysqlDB(MysqlConfig):
                 await conn.rollback()
                 logger.error(f"auto_commit error: {e}")
             finally:
-                await cursor.close()
-                if conn:
-                    await conn.ensure_closed()
-                    self._pool.release(conn)
+                await self.close_conn_cursor(conn, cursor)
 
     async def _execute_sql(
             self,
@@ -263,3 +260,15 @@ class MysqlDB(MysqlConfig):
         conn, cursor, err = await self._execute_sql(sql, args)
         await self.auto_commit(conn, cursor, session_auto_commit)
         return conn, cursor, err
+
+    async def close_conn_cursor(self, conn: Connection, cursor: Type['Cursor']):
+        """
+        session_auto_commit = False, 必须手动调用这个方法, 否则会导致 too many connection
+        """
+        await cursor.close()
+        if conn:
+            try:
+                await conn.ensure_closed()
+                self._pool.release(conn)
+            except Exception as e:
+                logger.error(f"close_conn_cursor: release conn fail {e.__repr__()}")
