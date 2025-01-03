@@ -28,6 +28,7 @@ async def query_tools():
     conn, cursor, err = await mysql_db.insert(sql, data, session_auto_commit=False)
     print(id(conn), id(cursor), err)
     await conn.commit()
+    await mysql_db.close_conn_cursor(conn, cursor)
     # 默认配置 autocommit=True, 这个sql自动提交, 修改为False, 则需要手动 commit 和处理错误err
     conn, cursor, err = await mysql_db.insert(sql, data)
     print(id(conn), id(cursor), err)
@@ -37,6 +38,7 @@ async def query_tools():
     conn, cursor, err = await mysql_db.insert(sql, data, session_auto_commit=False)
     print(id(conn), id(cursor), err)
     await conn.commit()
+    await mysql_db.close_conn_cursor(conn, cursor)
     conn, cursor, _ = await mysql_db.insert(sql, data)
     print(id(conn), id(cursor), err)
 
