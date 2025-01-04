@@ -71,7 +71,7 @@ class MysqlDB(MysqlConfig):
         pool_conn = await self._pool.acquire()
         if pool_conn is None:
             raise RuntimeError("Failed to acquire a valid connection from the pool.")
-        await self._pool.ping()
+        await pool_conn.ping()
         cursor = pool_conn.cursor()
         return pool_conn, cursor
 
