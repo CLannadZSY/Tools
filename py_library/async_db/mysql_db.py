@@ -71,6 +71,7 @@ class MysqlDB(MysqlConfig):
         pool_conn = await self._pool.acquire()
         if pool_conn is None:
             raise RuntimeError("Failed to acquire a valid connection from the pool.")
+        await self._pool.ping()
         cursor = pool_conn.cursor()
         return pool_conn, cursor
 
@@ -265,10 +266,13 @@ class MysqlDB(MysqlConfig):
         """
         session_auto_commit = False, 必须手动调用这个方法, 否则会导致 too many connection
         """
-        await cursor.close()
-        if conn:
-            try:
-                await conn.ensure_closed()
-                self._pool.release(conn)
-            except Exception as e:
-                logger.error(f"close_conn_cursor: release conn fail {e.__repr__()}")
+        try:
+            await cursor.close()
+            if conn:
+                try:
+                    await conn.ensure_closed()
+                    self._pool.release(conn)
+                except Exception as e:
+                    logger.error(f"close_conn_cursor: Failed to release connection: {e}")
+        except Exception as e:
+            logger.error(f"close_conn_cursor: Failed to close cursor: {e}")
