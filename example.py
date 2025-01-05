@@ -69,6 +69,8 @@ async def query_tools():
     data = (4,)
     conn, cursor, err = await mysql_db.update(sql, data)
 
+    await mysql_db.close_pool()
+
 
 if __name__ == '__main__':
     asyncio.run(query_tools())
