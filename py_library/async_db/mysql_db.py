@@ -283,3 +283,11 @@ class MysqlDB(MysqlConfig):
                     logger.error(f"close_conn_cursor: Failed to release connection: {e}")
         except Exception as e:
             logger.error(f"close_conn_cursor: Failed to close cursor: {e}")
+
+    async def close_pool(self):
+        """
+        关闭连接池
+        """
+        if self._pool is not None:
+            self._pool.close()
+            await self._pool.wait_closed()
