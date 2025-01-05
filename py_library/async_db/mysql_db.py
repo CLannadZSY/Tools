@@ -45,6 +45,11 @@ class MysqlDB(MysqlConfig):
             self._initialized = True
             asyncio.create_task(self._create_pool())
 
+    async def _pool_ready(self):
+        """Ensure that the pool is ready before continuing."""
+        while self._pool is None:
+            await asyncio.sleep(0.05)
+
     def to_dict(self):
         """
         将实例属性转换为字典。
@@ -58,15 +63,17 @@ class MysqlDB(MysqlConfig):
     async def _create_pool(self, **kwargs):
         """如果连接池不存在，则创建连接池。"""
         logger.info("正在创建MySQL连接池")
-        self._pool = await asyncmy.create_pool(
-            **self.to_dict(),
-            **kwargs
-        )
+        if self._pool is None:
+            self._pool = await asyncmy.create_pool(
+                **self.to_dict(),
+                **kwargs
+            )
 
     async def get_connection(self):
         """从连接池中获取连接。"""
         if self._pool is None:
             await self._create_pool()
+            await self._pool_ready()
 
         pool_conn = await self._pool.acquire()
         if pool_conn is None:
