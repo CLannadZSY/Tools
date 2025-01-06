@@ -140,13 +140,13 @@ class MysqlDB(MysqlConfig):
 
         match fetch_mode:
             case FetchMode.FETCHONE:
-                result = await cursor.fetchone()
+                result = await cursor.fetchone() or {}
 
             case FetchMode.FETCHALL:
-                result = await cursor.fetchall()
+                result = await cursor.fetchall() or []
 
             case FetchMode.FETCHMANY:
-                result = await cursor.fetchmany(fetch_size)
+                result = await cursor.fetchmany(fetch_size) or []
 
             case _:
                 logger.error(f"ERROR fetch_mode: {fetch_mode}")
