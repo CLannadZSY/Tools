@@ -138,19 +138,15 @@ class MysqlDB(MysqlConfig):
         """执行查询操作（SELECT），返回 MysqlQueryResult to enable chaining."""
         conn, cursor, _ = await self._execute_sql(sql, args)
 
-        match fetch_mode:
-            case FetchMode.FETCHONE:
-                result = await cursor.fetchone() or {}
-
-            case FetchMode.FETCHALL:
-                result = await cursor.fetchall() or []
-
-            case FetchMode.FETCHMANY:
-                result = await cursor.fetchmany(fetch_size) or []
-
-            case _:
-                logger.error(f"ERROR fetch_mode: {fetch_mode}")
-                result = None
+        if fetch_mode == FetchMode.FETCHONE:
+            result = await cursor.fetchone() or {}
+        elif fetch_mode == FetchMode.FETCHALL:
+            result = await cursor.fetchall() or []
+        elif fetch_mode == FetchMode.FETCHONE:
+            result = await cursor.fetchmany(fetch_size) or []
+        else:
+            logger.error(f"ERROR fetch_mode: {fetch_mode}")
+            result = None
 
         await self.auto_commit(conn, cursor, True)
 
