@@ -1,27 +1,28 @@
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from enum import Enum
+from typing import Optional, Union, Dict, Tuple, List, Any, TypeVar, Set, AsyncGenerator
+
 import asyncmy
-from asyncmy import Connection
 from asyncmy.cursors import Cursor
+from asyncmy import Connection, Pool
+from asyncmy.errors import MySQLError
 from sqlalchemy.orm import declarative_base
+
 from .env import MysqlConfig
-from typing import Optional, Union, Dict, Tuple, List, Type, Any, TypeVar, Set
 
 logger = logging.getLogger(__name__)
-
 BaseT = declarative_base()
 T = TypeVar('T', bound=BaseT)
 
 
-# 枚举类：查询结果获取模式
 class FetchMode(Enum):
-    FETCHONE = "fetchone"  # 获取单个结果
-    FETCHALL = "fetchall"  # 获取所有结果
-    FETCHMANY = "fetchmany"  # 获取所有结果
+    FETCHONE = "fetchone"
+    FETCHALL = "fetchall"
+    FETCHMANY = "fetchmany"
 
 
-# 枚举类：插入SQL模式
 class InsertModeSql(Enum):
     INSERT_DEFAULT = 'INSERT INTO `{table_name}` ({columns_field}) VALUES ({value_field})'
     INSERT_IGNORE = 'INSERT IGNORE INTO `{table_name}` ({columns_field}) VALUES ({value_field})'
@@ -30,27 +31,38 @@ class InsertModeSql(Enum):
 
 
 class MysqlDB(MysqlConfig):
-    _instance: Optional['MysqlDB'] = None  # 单例实例
+    _instance: Optional['MysqlDB'] = None
+    _lock: asyncio.Lock = asyncio.Lock()
+    _pool: Optional[Pool] = None
 
     def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
+        if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._cursor = None
         if not hasattr(self, '_initialized'):
-            self._pool = None
             self._initialized = True
-            asyncio.create_task(self._create_pool())
 
-    async def _pool_ready(self):
-        """Ensure that the pool is ready before continuing."""
-        while self._pool is None:
-            await asyncio.sleep(0.05)
+    async def ensure_pool(self) -> None:
+        """确保连接池已初始化"""
+        if self._pool is None:
+            await self._create_pool()
 
-    def to_dict(self):
+    async def _create_pool(self) -> None:
+        async with self._lock:
+            if self._pool is None:
+                logger.info("Creating MySQL connection pool")
+                try:
+                    self._pool = await asyncmy.create_pool(
+                        **self._get_connection_config(),
+                    )
+                except MySQLError as e:
+                    logger.error(f"Failed to create connection pool: {e}")
+                    raise e
+
+    def _get_connection_config(self) -> Dict:
         """
         将实例属性转换为字典。
         排除私有属性和可调用的方法。
@@ -60,27 +72,43 @@ class MysqlDB(MysqlConfig):
         attr['cursor_cls'] = self.cursor_cls  # 添加cursor类
         return attr
 
-    async def _create_pool(self, **kwargs):
-        """如果连接池不存在，则创建连接池。"""
-        logger.info("正在创建MySQL连接池")
-        if self._pool is None:
-            self._pool = await asyncmy.create_pool(
-                **self.to_dict(),
-                **kwargs
-            )
+    @asynccontextmanager
+    async def transactional(self) -> AsyncGenerator[Tuple[Connection, 'Cursor'], None]:
+        """事务管理上下文管理器"""
+        await self.ensure_pool()
+        async with self._pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    yield conn, cursor
+                    await conn.commit()
+                except Exception as e:
+                    await conn.rollback()
+                    logger.error(f"Transaction rolled back: {e}")
+                    raise e
 
-    async def get_connection(self):
-        """从连接池中获取连接。"""
-        if self._pool is None:
-            await self._create_pool()
-            await self._pool_ready()
-
-        pool_conn = await self._pool.acquire()
-        if pool_conn is None:
-            raise RuntimeError("Failed to acquire a valid connection from the pool.")
-        await pool_conn.ping()
-        cursor = pool_conn.cursor()
-        return pool_conn, cursor
+    async def _execute(
+            self,
+            sql: str,
+            params: Optional[Union[Tuple, Dict, List[Tuple]]] = None,
+            is_many: bool = False,
+    ) -> int:
+        """
+        执行SQL语句
+        :param sql: SQL语句
+        :param params: 参数
+        :param is_many: 是否批量操作
+        :return: 影响的行数
+        """
+        async with self.transactional() as (conn, cursor):
+            try:
+                if is_many:
+                    await cursor.executemany(sql, params or [])
+                else:
+                    await cursor.execute(sql, params or ())
+                return cursor.rowcount
+            except MySQLError as e:
+                logger.error(f"SQL execution failed: {sql[:200]} - {e}")
+                raise
 
     @staticmethod
     def make_insert_sql(
@@ -101,6 +129,10 @@ class MysqlDB(MysqlConfig):
                  insert into ... duplicate key update
         :return: 生成的SQL查询和插入数据
         """
+
+        if not datas:
+            raise ValueError("No data provided for insertion")
+
         logger.debug(f"正在为表 `{table_model}` 生成插入SQL，插入模式: {insert_mode}")
         insert_sql_mode = insert_mode.name
         insert_sql_template = insert_mode.value
@@ -134,36 +166,46 @@ class MysqlDB(MysqlConfig):
         logger.debug(f"生成的SQL: {sql} 数据: {new_datas}")
         return sql, new_datas
 
-    async def query(self, sql: str, args=None, table_model: Optional[Union[T, Any]] = None, fetch_mode: FetchMode = FetchMode.FETCHALL, fetch_size: int = 100) -> Optional[Union[T, List[T], List[Dict], Dict]]:
+    async def query(
+            self,
+            sql: str,
+            args=None,
+            table_model: Optional[Union[T, Any]] = None,
+            fetch_mode: FetchMode = FetchMode.FETCHALL,
+            fetch_size: int = 100
+    ) -> Optional[Union[T, List[T], List[Dict], Dict]]:
         """执行查询操作（SELECT），返回 MysqlQueryResult to enable chaining."""
-        conn, cursor, _ = await self._execute_sql(sql, args)
+        async with self.transactional() as (conn, cursor):
+            await cursor.execute(sql, args)
+            try:
 
-        if fetch_mode == FetchMode.FETCHONE:
-            result = await cursor.fetchone() or {}
-        elif fetch_mode == FetchMode.FETCHALL:
-            result = await cursor.fetchall() or []
-        elif fetch_mode == FetchMode.FETCHONE:
-            result = await cursor.fetchmany(fetch_size) or []
-        else:
-            logger.error(f"ERROR fetch_mode: {fetch_mode}")
-            result = None
+                if fetch_mode == FetchMode.FETCHONE:
+                    result = await cursor.fetchone() or {}
+                elif fetch_mode == FetchMode.FETCHALL:
+                    result = await cursor.fetchall() or []
+                elif fetch_mode == FetchMode.FETCHONE:
+                    result = await cursor.fetchmany(fetch_size) or []
+                else:
+                    logger.error(f"ERROR fetch_mode: {fetch_mode}")
+                    result = None
 
-        await self.auto_commit(conn, cursor, True)
+                if result and table_model is not None:
+                    if isinstance(result, List):
+                        result = [table_model(**x) for x in result]
+                    elif isinstance(result, Dict):
+                        result = table_model(**result)
+                return result
 
-        if result and table_model is not None:
-            if isinstance(result, List):
-                result = [table_model(**x) for x in result]
-            elif isinstance(result, Dict):
-                result = table_model(**result)
+            except Exception as e:
+                logger.error(f"_execute: {sql}, Error: {e}")
+                raise e
+
         return result
 
-    async def insert(self, sql: str, args: Optional[Union[Tuple, Dict, List[Dict], List[Tuple]]] = None, session_auto_commit: Optional[bool] = True) -> Tuple[
-        Connection, Type['Cursor'], Optional[str]]:
+    async def insert(self, sql: str, args: Optional[Union[Tuple, Dict, List[Dict], List[Tuple]]] = None) -> int:
         """执行插入操作（INSERT）。"""
         is_many = True if isinstance(args, List) else False
-        conn, cursor, err = await self._execute_sql(sql, args, is_many=is_many)
-        await self.auto_commit(conn, cursor, session_auto_commit)
-        return conn, cursor, err
+        return await self._execute(sql, args, is_many=is_many)
 
     async def insert_smart(
             self,
@@ -171,8 +213,7 @@ class MysqlDB(MysqlConfig):
             datas: Union[Dict, List[Dict]],
             update_columns: Optional[Union[Set[str], List[str], Tuple[str]]] = (),
             insert_mode: InsertModeSql = InsertModeSql.INSERT_DEFAULT,
-            session_auto_commit: Optional[bool] = True
-    ):
+    ) -> int:
         """
         根据数据自动生成插入SQL语句，支持单条和批量插入。
             sql格式: insert into <table_name> (field, ..., field) values (%s, ..., %s)
@@ -193,92 +234,21 @@ class MysqlDB(MysqlConfig):
                  replace into
                  insert ignore
                  insert into ... duplicate key update
-        :param session_auto_commit 自动提交
         :return: MysqlResult对象，包含插入操作的结果
         """
         # 如果传入model 还能校验字段是否匹配, 可以过滤掉不属于当前表的
         logger.info(f"为表 {table_model} 生成插入SQL，数据条数: {len(datas)}")
         sql, new_datas = self.make_insert_sql(table_model, datas, update_columns, insert_mode)
         is_many = False if isinstance(new_datas, Dict) else True
-        conn, cursor, err = await self._execute_sql(sql, new_datas, is_many=is_many)
-        await self.auto_commit(conn, cursor, session_auto_commit)
-        return conn, cursor, err
+        return await self._execute(sql, new_datas, is_many=is_many)
 
-    async def update(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None, session_auto_commit: Optional[bool] = True):
+    async def update(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> int:
         """执行更新操作（UPDATE）。"""
-        return await self._execute_and_commit(sql, args, session_auto_commit)
+        return await self._execute(sql, args)
 
-    async def delete(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None, session_auto_commit: Optional[bool] = True):
+    async def delete(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> int:
         """执行删除操作（DELETE）。"""
-        return await self._execute_and_commit(sql, args, session_auto_commit)
-
-    async def auto_commit(self, conn: Connection, cursor: type['Cursor'], session_auto_commit: bool = False):
-        # 会话自动提交为False, 覆盖默认配置, 不自动提交
-        if not session_auto_commit:
-            return
-
-        # 会话自动提交为True, 或者默认配置为True, 自动提交
-        if session_auto_commit or (not self.autocommit):
-            try:
-                await conn.commit()
-            except Exception as e:
-                print(e)
-                await conn.rollback()
-                logger.error(f"auto_commit error: {e}")
-            finally:
-                await self.close_conn_cursor(conn, cursor)
-
-    async def _execute_sql(
-            self,
-            sql: str,
-            datas=None,
-            is_many=False
-    ) -> Tuple[Connection, Type['Cursor'], Optional[str]]:
-        """
-        执行通用SQL命令（单个查询或批量操作）。
-        :param sql: SQL查询语句
-        :param datas: 查询参数
-        :param is_many: 是否为executemany操作
-        :return:
-        """
-        logger.debug(f"Execute Sql: {sql}")
-        e = None
-        conn, cursor = await self.get_connection()
-        try:
-            if is_many:
-                cursor.affect_row_count = await cursor.executemany(sql, datas)
-            else:
-                cursor.affect_row_count = await cursor.execute(sql, datas)
-
-            # 返回conn和cursor，让调用者决定是否提交
-            return conn, cursor, e
-        except Exception as e:
-            logger.error(f"Execute Sql: {sql}, Error: {e}")
-            # 发生异常时回滚
-            await conn.rollback()
-            e = e.__repr__()
-            return conn, cursor, e
-
-    async def _execute_and_commit(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None, session_auto_commit: Optional[bool] = True):
-        """通用的执行 SQL 并提交操作（包括 INSERT, UPDATE, DELETE）。"""
-        conn, cursor, err = await self._execute_sql(sql, args)
-        await self.auto_commit(conn, cursor, session_auto_commit)
-        return conn, cursor, err
-
-    async def close_conn_cursor(self, conn: Connection, cursor: Type['Cursor']):
-        """
-        session_auto_commit = False, 必须手动调用这个方法, 否则会导致 too many connection
-        """
-        try:
-            await cursor.close()
-            if conn:
-                try:
-                    await conn.ensure_closed()
-                    self._pool.release(conn)
-                except Exception as e:
-                    logger.error(f"close_conn_cursor: Failed to release connection: {e}")
-        except Exception as e:
-            logger.error(f"close_conn_cursor: Failed to close cursor: {e}")
+        return await self._execute(sql, args)
 
     async def close_pool(self):
         """
