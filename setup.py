@@ -5,7 +5,7 @@ with open("README.md", "r", encoding='utf-8') as fh:
 
 setuptools.setup(
     name="Py-library",
-    version="1.0.12",
+    version="1.0.13",
     author="CLannadZSY",
     author_email="zsymidi@gmail.com",
     description="py 工具箱",
