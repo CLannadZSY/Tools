@@ -244,11 +244,13 @@ class MysqlDB(MysqlConfig):
 
     async def update(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> int:
         """执行更新操作（UPDATE）。"""
-        return await self._execute(sql, args)
+        is_many = True if isinstance(args, List) else False
+        return await self._execute(sql, args, is_many)
 
     async def delete(self, sql: str, args: Optional[Union[Tuple, List, Dict]] = None) -> int:
         """执行删除操作（DELETE）。"""
-        return await self._execute(sql, args)
+        is_many = True if isinstance(args, List) else False
+        return await self._execute(sql, args, is_many)
 
     async def close_pool(self):
         """
